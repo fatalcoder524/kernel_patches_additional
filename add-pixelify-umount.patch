@@ -1,7 +1,7 @@
-diff --git a/core_hook.c b/core_hook.c
+diff --git a/kernel/core_hook.c b/kernel/core_hook.c
 index feade9a..187eb52 100644
---- a/core_hook.c
-+++ b/core_hook.c
+--- a/kernel/core_hook.c
++++ b/kernel/core_hook.c
 @@ -1019,6 +1019,26 @@ void susfs_try_umount_all(uid_t uid) {
  	// try umount lsposed dex2oat bins
  	ksu_try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH, uid);
