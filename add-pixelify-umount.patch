@@ -1,0 +1,31 @@
+diff --git a/core_hook.c b/core_hook.c
+index feade9a..187eb52 100644
+--- a/core_hook.c
++++ b/core_hook.c
+@@ -1019,6 +1019,26 @@ void susfs_try_umount_all(uid_t uid) {
+ 	// try umount lsposed dex2oat bins
+ 	ksu_try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH, uid);
+ 	ksu_try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH, uid);
++	
++	// try umount pixelify gphotos spoof configs
++	ksu_try_umount("/system/etc/sysconfig/pixel_2017_exclusive.xml", false, MNT_DETACH);
++	ksu_try_umount("/system/etc/sysconfig/pixel_2018_exclusive.xml", false, MNT_DETACH);
++	ksu_try_umount("/system/etc/sysconfig/pixel_2019_exclusive.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_2016_exclusive.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_2017_exclusive.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_2018_exclusive.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_2019_exclusive.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2017.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2018.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2019.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2019_midyear.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2020.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2020_midyear.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2021.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2021_midyear.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2022.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixel_experience_2022_midyear.xml", false, MNT_DETACH);
++	ksu_try_umount("/product/etc/sysconfig/pixelify_experience.xml", false, MNT_DETACH);
+ }
+ #endif
+ 
