@@ -3263,6 +3263,14 @@ diff --git a/include/net/tcp.h b/include/net/tcp.h
 index 244798d8dcac8..71e60a4e373cc 100644
 --- a/include/net/tcp.h
 +++ b/include/net/tcp.h
+@@ -350,6 +350,7 @@
+ struct sk_buff *tcp_stream_alloc_skb(struct sock *sk, gfp_t gfp,
+ 				     bool force_schedule);
+ 
++void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks);
+ static inline void tcp_dec_quickack_mode(struct sock *sk)
+ {
+ 	struct inet_connection_sock *icsk = inet_csk(sk);
 @@ -1083,6 +1083,9 @@ struct tcp_congestion_ops {
  	/* override sysctl_tcp_min_tso_segs */
  	u32 (*min_tso_segs)(struct sock *sk);
@@ -3277,6 +3285,23 @@ diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
 index 10516595f379d..94ad315d8ab94 100644
 --- a/net/ipv4/tcp_input.c
 +++ b/net/ipv4/tcp_input.c
+@@ -287,7 +287,7 @@
+ 		icsk->icsk_ack.quick = quickacks;
+ }
+ 
++void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks)
+-static void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks)
+ {
+ 	struct inet_connection_sock *icsk = inet_csk(sk);
+ 
+@@ -295,6 +299,7 @@
+ 	inet_csk_exit_pingpong_mode(sk);
+ 	icsk->icsk_ack.ato = TCP_ATO_MIN;
+ }
++EXPORT_SYMBOL(tcp_enter_quickack_mode);
+ 
+ /* Send ACKs quickly, if "quick" count is not exhausted
+  * and the session is not interactive.
 @@ -1071,7 +1071,12 @@ static void tcp_verify_retransmit_hint(struct tcp_sock *tp, struct sk_buff *skb)
   */
  static void tcp_notify_skb_loss_event(struct tcp_sock *tp, const struct sk_buff *skb)
