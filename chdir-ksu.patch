@@ -5,8 +5,8 @@ index 9f5d7ca9..b8bc59bf 100644
 @@ -24,5 +24,7 @@
  // For volume button
  int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, 
-               int *value);
-+              
+				  int *value);
++
 +int ksu_handle_chdir(const char *filename);
  
  #endif
