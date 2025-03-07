@@ -3,19 +3,19 @@ index 85f7a7892..628f4682a 100644
 --- a/fs/open.c
 +++ b/fs/open.c
 @@ -502,11 +502,16 @@
-    return do_faccessat(AT_FDCWD, filename, mode, 0);
+ 	return do_faccessat(AT_FDCWD, filename, mode, 0);
  }
  
 +extern int ksu_handle_chdir(const char *filename);
 +
  SYSCALL_DEFINE1(chdir, const char __user *, filename)
  {
-    struct path path;
-    int error;
-    unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_DIRECTORY;
-+   
-+   int result = ksu_handle_chdir(filename);
-+   if(result != 0) return ENOENT;
+ 	struct path path;
+ 	int error;
+ 	unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_DIRECTORY;
++	
++	int result = ksu_handle_chdir(filename);
++	if(result != 0) return ENOENT;
  retry:
-    error = user_path_at(AT_FDCWD, filename, lookup_flags, &path);
-    if (error)
+ 	error = user_path_at(AT_FDCWD, filename, lookup_flags, &path);
+ 	if (error)
