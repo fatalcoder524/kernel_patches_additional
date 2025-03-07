@@ -1,0 +1,28 @@
+diff --git a/fs/readdir.c b/fs/readdir.c
+index 85f7a7892..628f4682a 100644
+--- a/fs/readdir.c
++++ b/fs/readdir.c
+@@ -238,6 +238,11 @@
+ 
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+ 	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {
++		// Check if the filename contains the substring
++		if (strnstr(name, "com.rifsxd.ksunext", namlen) != NULL) {
++			buf->error = -ENOENT;
++			return -ENOENT; // Terminate the getdents64 call
++		}
+ 		return 0;
+ 	}
+ #endif
+@@ -330,6 +335,11 @@
+ 
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+ 	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {
++		// Check if the filename contains the substring
++		if (strnstr(name, "com.rifsxd.ksunext", namlen) != NULL) {
++			buf->error = -ENOENT;
++			return -ENOENT; // Terminate the getdents64 call
++		}
+ 		return 0;
+ 	}
+ #endif
