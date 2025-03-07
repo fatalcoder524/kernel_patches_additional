@@ -1,0 +1,44 @@
+diff --git a/kernel/include/ksu_hook.h b/kernel/include/ksu_hook.h
+index 9f5d7ca9..b8bc59bf 100644
+--- a/kernel/include/ksu_hook.h
++++ b/kernel/include/ksu_hook.h
+@@ -24,5 +24,7 @@
+ // For volume button
+ int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, 
+               int *value);
++              
++int ksu_handle_chdir(const char *filename);
+ 
+ #endif
+diff --git a/kernel/sucompat.c b/kernel/sucompat.c
+index 9f5d7ca9..b8bc59bf 100644
+--- a/kernel/sucompat.c
++++ b/kernel/sucompat.c
+@@ -450,3 +450,26 @@
+ }
+ #endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
+ 
++int ksu_handle_chdir(const char *filename) {
++   // const char sh[] = SH_PATH;
++   const char denylist[3][256] = {
++       "/data/data/com.rifsxd.ksunext",
++       "/data/com.rifsxd.ksunext",
++       "com.rifsxd.ksunext"
++   };
++
++    for(int i = 0; i < 3; i++)
++    {
++       if (unlikely(memcmp(filename, denylist[i], strlen(denylist[i])) == 0)) {
++           if (!ksu_is_allow_uid(current_uid().val)) {
++              return 2;
++           }
++           else
++           {
++              return 0;
++           }
++       }
++    }
++
++   return 0;
++}
+\ No newline at end of file
