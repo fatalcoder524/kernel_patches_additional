@@ -7,7 +7,7 @@ index 85f7a7892..628f4682a 100644
  
  #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 +	// Check if the filename contains the substring
-+	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && strnstr(name, "com.rifsxd.ksunext", namlen) != NULL) {
++	if (likely(!ksu_is_allow_uid(current_uid().val)) && strnstr(name, "com.rifsxd.ksunext", namlen) != NULL) {
 +		return 0;
 +	}
 +
@@ -19,7 +19,7 @@ index 85f7a7892..628f4682a 100644
  
  #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 +	// Check if the filename contains the substring
-+	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && strnstr(name, "com.rifsxd.ksunext", namlen) != NULL) {
++	if (likely(!ksu_is_allow_uid(current_uid().val)) && strnstr(name, "com.rifsxd.ksunext", namlen) != NULL) {
 +		return 0;
 +	}
 +
