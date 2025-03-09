@@ -57,6 +57,14 @@ diff --git a/include/net/tcp.h b/include/net/tcp.h
 index 60c384569..fa924be33 100644
 --- a/include/net/tcp.h
 +++ b/include/net/tcp.h
+@@ -343,6 +343,7 @@
+ 			struct pipe_inode_info *pipe, size_t len,
+ 			unsigned int flags);
+
++void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks);
+ static inline void tcp_dec_quickack_mode(struct sock *sk)
+ {
+ 	struct inet_connection_sock *icsk = inet_csk(sk);
 @@ -371,6 +371,7 @@ static inline void tcp_dec_quickack_mode(struct sock *sk,
  #define	TCP_ECN_QUEUE_CWR	2
  #define	TCP_ECN_DEMAND_CWR	4
@@ -3069,6 +3077,15 @@ diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
 index 141e85e64..425014b2c 100644
 --- a/net/ipv4/tcp_input.c
 +++ b/net/ipv4/tcp_input.c
+@@ -301,7 +301,7 @@
+ 		icsk->icsk_ack.quick = quickacks;
+ }
+
+-static void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks)
++void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks)
+ {
+ 	struct inet_connection_sock *icsk = inet_csk(sk);
+
 @@ -349,7 +349,7 @@ static void __tcp_ecn_check_ce(struct sock *sk, const struct sk_buff *skb)
  			tcp_enter_quickack_mode(sk, 2);
  		break;
