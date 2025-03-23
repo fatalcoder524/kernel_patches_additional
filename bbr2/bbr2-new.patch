@@ -1,28 +1,30 @@
-From 4dc7f11fe8a503a1fbcbef289e63296cbeeae201 Mon Sep 17 00:00:00 2001
-From: Oleksandr Natalenko <oleksandr@natalenko.name>
-Date: Mon, 12 Jul 2021 09:07:40 +0200
-Subject: [PATCH] bbr2-5.15: introduce BBRv2
-
-Signed-off-by: Oleksandr Natalenko <oleksandr@natalenko.name>
----
- include/linux/tcp.h                |    3 +-
- include/net/inet_connection_sock.h |    5 +-
- include/net/tcp.h                  |   50 +-
- include/uapi/linux/inet_diag.h     |   33 +
- net/ipv4/Kconfig                   |   22 +
- net/ipv4/Makefile                  |    1 +
- net/ipv4/bpf_tcp_ca.c              |    2 +-
- net/ipv4/tcp.c                     |    1 +
- net/ipv4/tcp_bbr.c                 |   38 +-
- net/ipv4/tcp_bbr2.c                | 2674 ++++++++++++++++++++++++++++
- net/ipv4/tcp_cong.c                |    1 +
- net/ipv4/tcp_input.c               |   38 +-
- net/ipv4/tcp_output.c              |   28 +-
- net/ipv4/tcp_rate.c                |   36 +-
- net/ipv4/tcp_timer.c               |    1 +
- 15 files changed, 2886 insertions(+), 47 deletions(-)
- create mode 100644 net/ipv4/tcp_bbr2.c
-
+diff --git a/android/abi_gki_aarch64_pixel b/android/abi_gki_aarch64_pixel
+index cc8edfd0d35e..58eb7f40e263 100644
+--- a/android/abi_gki_aarch64_pixel
++++ b/android/abi_gki_aarch64_pixel
+@@ -1888,6 +1854,8 @@
+   tcpci_irq
+   tcpci_register_port
+   tcpci_unregister_port
++  tcp_cong_avoid_ai
++  tcp_enter_quickack_mode
+   tcpm_cc_change
+   tcpm_is_toggling
+   tcpm_pd_hard_reset
+@@ -1897,6 +1865,13 @@
+   tcpm_sourcing_vbus
+   tcpm_update_sink_capabilities
+   tcpm_vbus_change
++  tcp_register_congestion_control
++  tcp_reno_cong_avoid
++  tcp_reno_ssthresh
++  tcp_reno_undo_cwnd
++  __tcp_send_ack
++  tcp_slow_start
++  tcp_unregister_congestion_control
+   thermal_cdev_update
+   thermal_cooling_device_unregister
+   thermal_of_cooling_device_register
 diff --git a/include/linux/tcp.h b/include/linux/tcp.h
 index 48d8a3633..1bd559c69 100644
 --- a/include/linux/tcp.h
