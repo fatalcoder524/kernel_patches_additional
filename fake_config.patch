@@ -1,0 +1,19 @@
+diff --git a/kernel/Makefile b/kernel/Makefile
+index 3d6ca8e9d..3fc4dc811 100644
+--- a/kernel/Makefile
++++ b/kernel/Makefile
+@@ -149,9 +149,13 @@
+ 
+ $(obj)/configs.o: $(obj)/config_data.gz
+ 
++cmd_filter_gzip = \
++	sed -e 's/^CONFIG_TCP_CONG_ADVANCED=.*/# CONFIG_TCP_CONG_ADVANCED is not set/' $< | \
++	gzip -f -n > $@
++
+ targets += config_data config_data.gz
+ $(obj)/config_data.gz: $(obj)/config_data FORCE
+-	$(call if_changed,gzip)
++	$(call if_changed,filter_gzip)
+ 
+ filechk_cat = cat $<
+ 
