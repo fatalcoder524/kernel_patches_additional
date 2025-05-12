@@ -7,7 +7,7 @@ index 3d6ca8e9d..3fc4dc811 100644
  $(obj)/configs.o: $(obj)/config_data.gz
  
 +quiet_cmd_modify_and_gzip = MODIFY_AND_GZIP $@
-+      cmd_modify_and_gzip = echo "Real prerequisites: $(real-prereqs)"; echo "KGZIP: $(KGZIP)"; sed 's/^CONFIG_TCP_CONG_ADVANCED=y/# CONFIG_TCP_CONG_ADVANCED is not set/' $(real-prereqs) | $(KGZIP) -n -f -9 > $@
++      cmd_modify_and_gzip = cat $(real-prereqs) | sed 's/^CONFIG_TCP_CONG_ADVANCED=y/# CONFIG_TCP_CONG_ADVANCED is not set/' | $(KGZIP) -n -f -9 > $@
 +
  targets += config_data config_data.gz
  $(obj)/config_data.gz: $(obj)/config_data FORCE
