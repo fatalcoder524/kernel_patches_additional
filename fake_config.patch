@@ -2,12 +2,17 @@ diff --git a/kernel/Makefile b/kernel/Makefile
 index 3d6ca8e9d..3fc4dc811 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
-@@ -149,9 +149,12 @@
+@@ -149,9 +149,17 @@
  
  $(obj)/configs.o: $(obj)/config_data.gz
  
++CONFIG_OPTIONS := \
++    CONFIG_TCP_CONG_ADVANCED \
++    CONFIG_TCP_CONG_BBR \
++    CONFIG_KSU_SUSFS_SUS_SU
++
 +quiet_cmd_modify_and_gzip = MODIFY_AND_GZIP $@
-+      cmd_modify_and_gzip = sed $< -e 's/^CONFIG_TCP_CONG_ADVANCED=y/\# CONFIG_TCP_CONG_ADVANCED is not set/' | $(KGZIP) -n -f -9 > $@
++	cmd_modify_and_gzip = sed $(foreach option,$(CONFIG_OPTIONS),-e 's/^$(option)=y/# $(option) is not set/' -e 's/^$(option)=n/# $(option) is not set/') $< | $(KGZIP) -n -f -9 > $@
 +
  targets += config_data config_data.gz
  $(obj)/config_data.gz: $(obj)/config_data FORCE
