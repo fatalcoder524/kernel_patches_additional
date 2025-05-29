@@ -124,3 +124,27 @@ diff -u a/include/linux/tracehook.h b/include/linux/tracehook.h
  }
  
  /**
+diff -u a/kernel/ptrace.c b/kernel/ptrace.c
+--- a/kernel/ptrace.c	2025-05-28 18:03:08.850551845 +0000
++++ b/kernel/ptrace.c	2025-05-28 18:15:35.463720730 +0000
+@@ -604,6 +604,10 @@
+ 	 * the comment in ptrace_resume().
+ 	 */
+ 	child->exit_code = data;
++
++	/* Reset ptrace_message to avoid stale PID leaks */
++	child->ptrace_message = 0;
++	
+ 	__ptrace_detach(current, child);
+ 	write_unlock_irq(&tasklist_lock);
+ 
+@@ -902,6 +906,9 @@
+ 	if (need_siglock)
+ 		spin_unlock_irq(&child->sighand->siglock);
+ 
++	/* Clear ptrace_message to avoid leaking stale event data (e.g., zygote PID) */
++	child->ptrace_message = 0;
++	
+ 	return 0;
+ }
+ 
