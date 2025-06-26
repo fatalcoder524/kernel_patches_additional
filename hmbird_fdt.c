@@ -69,7 +69,7 @@ static int __init hmbird_patch_init(void)
     struct device_node *ver_np;
     const char *type;
     int ret;
-    struct property *prop
+    struct property *prop;
 
     ver_np = of_find_node_by_path("/soc/oplus,hmbird/version_type");
     if (!ver_np) {
