@@ -1,0 +1,73 @@
+--- anykernel.sh	2025-06-26 20:48:10.437950200 +0530
++++ anykernel.sh	2025-06-26 20:50:42.975165300 +0530
+@@ -50,5 +50,70 @@
+     write_boot
+ else
+     flash_boot
+ fi
+ ## end boot install
++
++MKDTIMG=$BIN/mkdtimg
++FDTGET=$BIN/fdtget
++FDTPUT=$BIN/fdtput
++
++repack_and_patch_dtbo() {
++	ui_print " Extracting DTBO img"
++	DTBO_PARTITION="/dev/block/bootdevice/by-name/dtbo$(getprop ro.boot.slot_suffix)"
++	dd if=$DTBO_PARTITION of="dtbo_dir/dtbo.img"
++	$MKDTIMG dump "dtbo_dir/dtbo.img" -b "dtbo_dir/dtb" >/dev/null 2>&1
++	wait
++	
++	cd "dtbo_dir/dtb"
++	local isPatched=0
++	local isFound=0
++	local foundLoc=0
++	for i in dtb.*; do
++		ui_print " Searching $1 file"
++		for i in $($FDTGET $1 /__fixups__ soc); do
++			local lpath=$(echo $i | sed 's/\:target\:0//g')
++			if $FDTGET -l $1 ${lpath}/__overlay__ | grep -q hmbird; then
++				if [ $($FDTGET $1 ${lpath}/__overlay__/oplus,hmbird/version_type type) == "HMBIRD_GKI" ] || [ $($FDTGET $1 ${lpath}/__overlay__/oplus,hmbird/version_type type) == "HMBIRD_OGKI" ]; then
++					if [ $($FDTGET $1 ${lpath}/__overlay__/oplus,hmbird/version_type type) == "HMBIRD_GKI" ]; then
++						isPatched=1
++						ui_print " $1 already patched"
++					else
++						isFound=1
++						foundLoc=$1
++						ui_print " Found HMBIRD_OGKI in $1"
++					fi
++				fi
++				break
++			fi
++		done
++		if [ $isPatched -eq 1 ] || [ $isFound -eq 1 ]; then
++			break
++		fi
++	done
++	
++	if [ $isPatched -eq 0 ] && [ $isFound -eq 1 ]; then
++		ui_print " Rewriting type to HMBIRD_GKI."
++		$FDTPUT -t s $foundLoc ${lpath}/__overlay__/oplus,hmbird/version_type type HMBIRD_GKI
++	fi
++	
++	if [ $isPatched -eq 0 ] && [ $isFound -eq 1 ]; then
++		ui_print " Rewriting type to HMBIRD_GKI."
++		$FDTPUT -t s $foundLoc ${lpath}/__overlay__/oplus,hmbird/version_type type HMBIRD_GKI
++	fi
++	
++	if [ $isPatched -eq 0 ] && [ $isFound -eq 0 ]; then
++		ui_print " oplus,hmbird not found. Adding HMBIRD_GKI to all dtb files."
++		for i in dtb.*; do
++			for i in $($FDTGET $1 /__fixups__ soc); do
++				local ppath=$(echo $i | sed 's/\:target\:0//g')
++				if $FDTGET -l $1 ${ppath}/__overlay__ | grep -q reboot_reason; then
++					$FDTPUT -p -c $1 ${ppath}/__overlay__/oplus,hmbird/version_type
++					$FDTPUT -t s $1 ${ppath}/__overlay__/oplus,hmbird/version_type type HMBIRD_GKI
++					break
++				fi
++			done
++		done
++	fi
++}
++
++repack_and_patch_dtbo
