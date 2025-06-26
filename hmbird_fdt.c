@@ -3,7 +3,7 @@
 #include <linux/libfdt.h>
 #include <asm-generic/sections.h>
 
-extern uint8_t __dtb_start[]; // Provided by kernel
+extern uint8_t __dtb_start[]; // Provided by linker
 
 static int __init hmbird_fdt_patch(void)
 {
@@ -15,11 +15,9 @@ static int __init hmbird_fdt_patch(void)
         return -EINVAL;
     }
 
-    // Try multiple paths in case overlay placement varies
     const char *paths[] = {
         "/soc/oplus,hmbird/version_type",
-        "/oplus,hmbird/version_type",
-        "/platform/soc/oplus,hmbird/version_type",
+        "/oplus,hmbird/version_type",  // May still exist without /soc prefix
         NULL
     };
 
@@ -32,22 +30,42 @@ static int __init hmbird_fdt_patch(void)
         }
     }
 
+    // Step 1: Try known paths
     if (offset < 0) {
-        pr_info("hmbird_fdt_patch: oplus,hmbird/version_type not found in FDT\n");
-        return -ENODEV;
+        pr_info("hmbird_fdt_patch: oplus,hmbird/version_type not found, searching under /soc...\n");
+
+        int soc_off = fdt_path_offset(fdt, "/soc");
+        if (soc_off < 0) {
+            pr_info("hmbird_fdt_patch: /soc not found, skipping creation\n");
+            return -ENODEV;
+        }
+
+        offset = fdt_subnode_offset(fdt, soc_off, "oplus,hmbird");
+        if (offset >= 0) {
+            offset = fdt_subnode_offset(fdt, offset, "version_type");
+        }
+
+        if (offset < 0) {
+            pr_info("hmbird_fdt_patch: Creating /soc/oplus,hmbird/version_type\n");
+
+            int hmbird_off = fdt_add_subnode(fdt, soc_off, "oplus,hmbird");
+            if (hmbird_off < 0) {
+                pr_err("hmbird_fdt_patch: Failed to create /soc/oplus,hmbird (%d)\n", hmbird_off);
+                return hmbird_off;
+            }
+
+            offset = fdt_add_subnode(fdt, hmbird_off, "version_type");
+            if (offset < 0) {
+                pr_err("hmbird_fdt_patch: Failed to create version_type (%d)\n", offset);
+                return offset;
+            }
+        }
     }
 
-    const char *val = NULL;
-    int len;
-    val = fdt_getprop(fdt, offset, "type", &len);
-    if (!val || strncmp(val, "HMBIRD_OGKI", len)) {
-        pr_info("hmbird_fdt_patch: type property not found or not matching\n");
-        return -ENOENT;
-    }
-
+    // Step 2: Set the type property
     int ret = fdt_setprop_string(fdt, offset, "type", "HMBIRD_GKI");
     if (ret != 0) {
-        pr_err("hmbird_fdt_patch: Failed to update FDT property: %s\n", fdt_strerror(ret));
+        pr_err("hmbird_fdt_patch: Failed to update 'type' property: %s\n", fdt_strerror(ret));
         return ret;
     }
 
@@ -58,4 +76,4 @@ early_initcall(hmbird_fdt_patch);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("fatalcoder524");
-MODULE_DESCRIPTION("Patches HMBIRD type in FDT directly.");
+MODULE_DESCRIPTION("Patches /soc/oplus,hmbird/version_type.type to HMBIRD_GKI. Creates if missing.");
