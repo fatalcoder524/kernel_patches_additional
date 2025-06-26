@@ -69,6 +69,7 @@ static int __init hmbird_patch_init(void)
     struct device_node *ver_np;
     const char *type;
     int ret;
+    struct property *prop
 
     ver_np = of_find_node_by_path("/soc/oplus,hmbird/version_type");
     if (!ver_np) {
@@ -91,7 +92,7 @@ static int __init hmbird_patch_init(void)
         return 0;
     }
 
-    struct property *prop = of_find_property(ver_np, "type", NULL);
+    prop = of_find_property(ver_np, "type", NULL);
     if (prop) {
         struct property *new_prop = kmalloc(sizeof(*prop), GFP_KERNEL);
         if (!new_prop) {
