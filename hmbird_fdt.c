@@ -1,79 +1,133 @@
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/libfdt.h>
-#include <asm-generic/sections.h>
+#include <linux/of.h>
+#include <linux/slab.h>
+#include <linux/string.h>
 
-extern uint8_t __dtb_start[]; // Provided by linker
+// Internal OF functions (not exported, may fail on some kernels)
+extern struct device_node *of_new_node(struct device_node *parent, const char *name);
+extern int of_add_property(struct device_node *np, struct property *prop);
 
-static int __init hmbird_fdt_patch(void)
+// Helper to create the full path and add "type=HMBIRD_GKI"
+static struct device_node *create_hmbird_node(void)
 {
-    void *fdt = __dtb_start;
-    int offset;
+    struct device_node *soc_np, *oplus_np, *ver_np;
+    struct property *prop;
 
-    if (fdt_check_header(fdt)) {
-        pr_err("hmbird_fdt_patch: Invalid FDT blob\n");
-        return -EINVAL;
+    soc_np = of_find_node_by_path("/soc");
+    if (!soc_np) {
+        pr_err("hmbird_patch: /soc node not found\n");
+        return NULL;
     }
 
-    const char *paths[] = {
-        "/soc/oplus,hmbird/version_type",
-        "/oplus,hmbird/version_type",  // May still exist without /soc prefix
-        NULL
-    };
-
-    int i;
-    for (i = 0; paths[i]; i++) {
-        offset = fdt_path_offset(fdt, paths[i]);
-        if (offset >= 0) {
-            pr_info("hmbird_fdt_patch: Found node at %s\n", paths[i]);
-            break;
-        }
+    oplus_np = of_new_node(soc_np, "oplus,hmbird");
+    if (!oplus_np) {
+        pr_err("hmbird_patch: failed to create /soc/oplus,hmbird\n");
+        of_node_put(soc_np);
+        return NULL;
     }
 
-    // Step 1: Try known paths
-    if (offset < 0) {
-        pr_info("hmbird_fdt_patch: oplus,hmbird/version_type not found, searching under /soc...\n");
+    ver_np = of_new_node(oplus_np, "version_type");
+    if (!ver_np) {
+        pr_err("hmbird_patch: failed to create /soc/oplus,hmbird/version_type\n");
+        of_node_put(oplus_np);
+        of_node_put(soc_np);
+        return NULL;
+    }
 
-        int soc_off = fdt_path_offset(fdt, "/soc");
-        if (soc_off < 0) {
-            pr_info("hmbird_fdt_patch: /soc not found, skipping creation\n");
+    // Create and add the 'type' property
+    prop = kzalloc(sizeof(*prop), GFP_KERNEL);
+    if (!prop) {
+        pr_err("hmbird_patch: kmalloc for prop failed\n");
+        of_node_put(ver_np);
+        return NULL;
+    }
+
+    prop->name = kstrdup("type", GFP_KERNEL);
+    prop->value = kstrdup("HMBIRD_GKI", GFP_KERNEL);
+    prop->length = strlen("HMBIRD_GKI") + 1;
+
+    if (of_add_property(ver_np, prop)) {
+        pr_err("hmbird_patch: failed to add 'type' property\n");
+        kfree(prop->name);
+        kfree(prop->value);
+        kfree(prop);
+        of_node_put(ver_np);
+        return NULL;
+    }
+
+    pr_info("hmbird_patch: created /soc/oplus,hmbird/version_type with type=HMBIRD_GKI\n");
+
+    of_node_put(oplus_np);  // We still hold ver_np ref
+    of_node_put(soc_np);    // Released
+
+    return ver_np;
+}
+
+static int __init hmbird_patch_init(void)
+{
+    struct device_node *ver_np;
+    const char *type;
+    int ret;
+
+    ver_np = of_find_node_by_path("/soc/oplus,hmbird/version_type");
+    if (!ver_np) {
+        ver_np = create_hmbird_node();
+        if (!ver_np) {
+            pr_err("hmbird_patch: failed to create or find version_type node\n");
             return -ENODEV;
         }
-
-        offset = fdt_subnode_offset(fdt, soc_off, "oplus,hmbird");
-        if (offset >= 0) {
-            offset = fdt_subnode_offset(fdt, offset, "version_type");
-        }
-
-        if (offset < 0) {
-            pr_info("hmbird_fdt_patch: Creating /soc/oplus,hmbird/version_type\n");
-
-            int hmbird_off = fdt_add_subnode(fdt, soc_off, "oplus,hmbird");
-            if (hmbird_off < 0) {
-                pr_err("hmbird_fdt_patch: Failed to create /soc/oplus,hmbird (%d)\n", hmbird_off);
-                return hmbird_off;
-            }
-
-            offset = fdt_add_subnode(fdt, hmbird_off, "version_type");
-            if (offset < 0) {
-                pr_err("hmbird_fdt_patch: Failed to create version_type (%d)\n", offset);
-                return offset;
-            }
-        }
     }
 
-    // Step 2: Set the type property
-    int ret = fdt_setprop_string(fdt, offset, "type", "HMBIRD_GKI");
-    if (ret != 0) {
-        pr_err("hmbird_fdt_patch: Failed to update 'type' property: %s\n", fdt_strerror(ret));
-        return ret;
+    ret = of_property_read_string(ver_np, "type", &type);
+    if (ret) {
+        pr_info("hmbird_patch: type property not found\n");
+        of_node_put(ver_np);
+        return 0;
     }
 
-    pr_info("hmbird_fdt_patch: Successfully patched HMBIRD_OGKI → HMBIRD_GKI\n");
+    if (strcmp(type, "HMBIRD_OGKI")) {
+        of_node_put(ver_np);
+        return 0;
+    }
+
+    struct property *prop = of_find_property(ver_np, "type", NULL);
+    if (prop) {
+        struct property *new_prop = kmalloc(sizeof(*prop), GFP_KERNEL);
+        if (!new_prop) {
+            pr_info("hmbird_patch: kmalloc for new_prop failed\n");
+            of_node_put(ver_np);
+            return 0;
+        }
+        memcpy(new_prop, prop, sizeof(*prop));
+        new_prop->value = kmalloc(strlen("HMBIRD_GKI") + 1, GFP_KERNEL);
+        if (!new_prop->value) {
+            pr_info("hmbird_patch: kmalloc for new_prop->value failed\n");
+            kfree(new_prop);
+            of_node_put(ver_np);
+            return 0;
+        }
+        strcpy(new_prop->value, "HMBIRD_GKI");
+        new_prop->length = strlen("HMBIRD_GKI") + 1;
+
+        if (of_remove_property(ver_np, prop) != 0) {
+            pr_info("hmbird_patch: of_remove_property failed\n");
+            return 0;
+        }
+        if (of_add_property(ver_np, new_prop) != 0) {
+            pr_info("hmbird_patch: of_add_property failed\n");
+            return 0;
+        }
+        pr_info("hmbird_patch: success from HMBIRD_OGKI to HMBIRD_GKI\n");
+    }
+    else {
+        pr_info("hmbird_patch: type property structure not found\n");
+    }
+    of_node_put(ver_np);
     return 0;
 }
-early_initcall(hmbird_fdt_patch);
+early_initcall(hmbird_patch_init);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("fatalcoder524");
-MODULE_DESCRIPTION("Patches /soc/oplus,hmbird/version_type.type to HMBIRD_GKI. Creates if missing.");
+MODULE_DESCRIPTION("Forcefully convert HMBIRD_OGKI to HMBIRD_GKI, creates node if missing.");
