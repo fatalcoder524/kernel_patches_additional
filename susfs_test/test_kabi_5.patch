@@ -1,0 +1,22 @@
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index 9c315023a..d5ab7ca9c 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1516,13 +1516,13 @@  struct task_struct {
+ 	ANDROID_KABI_RESERVE(2);
+ 	ANDROID_KABI_RESERVE(3);
+ 	ANDROID_KABI_RESERVE(4);
+-	ANDROID_KABI_RESERVE(5);
+-	ANDROID_KABI_RESERVE(6);
+ #ifdef CONFIG_KSU_SUSFS
+-	ANDROID_KABI_USE(7, u64 susfs_task_state);
++	ANDROID_KABI_USE(5, u64 susfs_task_state);
+ #else
+-	ANDROID_KABI_RESERVE(7);
++	ANDROID_KABI_RESERVE(5);
+ #endif
++	ANDROID_KABI_RESERVE(6);
++	ANDROID_KABI_RESERVE(7);
+ 	ANDROID_KABI_RESERVE(8);
+ 
+ 	/*
