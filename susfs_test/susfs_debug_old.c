@@ -246,8 +246,7 @@ static inline bool is_i_uid_in_android_data_not_allowed(uid_t i_uid) {
 }
 
 static inline bool is_i_uid_in_sdcard_not_allowed(void) {
-    return (current_uid().val != 0);
-	//return (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC));
+	return (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC));
 }
 
 static inline bool is_i_uid_not_allowed(uid_t i_uid) {
