@@ -1,5 +1,7 @@
---- sched.h	2025-07-06 19:07:43.667942500 +0530
-+++ sched_new.h	2025-07-06 19:09:03.777022500 +0530
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index 9c315023a..d5ab7ca9c 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
 @@ -1513,16 +1513,16 @@
  #endif
  
