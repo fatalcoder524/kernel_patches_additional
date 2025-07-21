@@ -1,0 +1,78 @@
+diff --git a/fs/susfs.c b/fs/susfs.c
+index 9c315023a..d5ab7ca9c 100644
+--- a/fs/susfs.c
++++ b/fs/susfs.c
+@@ -12,10 +12,11 @@
+ #include <linux/uaccess.h>
+ #include <linux/version.h>
+ #include <linux/fdtable.h>
+ #include <linux/statfs.h>
+ #include <linux/random.h>
++#include <linux/string.h>
+ #include <linux/susfs.h>
+ #include "mount.h"
+ 
+ static spinlock_t susfs_spin_lock;
+ 
+@@ -38,11 +39,12 @@
+ static LIST_HEAD(LH_SUS_PATH_LOOP);
+ static LIST_HEAD(LH_SUS_PATH_ANDROID_DATA);
+ static LIST_HEAD(LH_SUS_PATH_SDCARD);
+ static struct st_android_data_path android_data_path = {0};
+ static struct st_sdcard_path sdcard_path = {0};
+-const struct qstr susfs_fake_qstr_name = QSTR_INIT("..5.u.S", 7); // used to re-test the dcache lookup, make sure you don't have file named like this!!
++struct qstr susfs_fake_qstr_name = {0};
++static char name_buf[13] = {0};
+ 
+ int susfs_set_i_state_on_external_dir(char __user* user_info, int cmd) {
+ 	struct path path;
+ 	int err = 0;
+ 	struct inode *inode = NULL;
+@@ -1288,18 +1290,47 @@
+ out_kfree_kbuf:
+ 	kfree(kbuf);
+ 	return err;
+ }
+ 
++static char random_alnum(void)
++{
++	unsigned char r = get_random_u32() % 62;
++	if (r < 10) return '0' + r;         // 0–9
++	if (r < 36) return 'A' + (r - 10);  // A–Z
++	return 'a' + (r - 36);              // a–z
++}
++
++static void generate_formatted_qstr(void)
++{
++	name_buf[0]  = '.';
++	name_buf[1]  = '.';
++	name_buf[2]  = random_alnum();
++	name_buf[3]  = random_alnum();
++	name_buf[4]  = '.';
++	name_buf[5]  = random_alnum();
++	name_buf[6]  = random_alnum();
++	name_buf[7]  = random_alnum();
++	name_buf[8]  = random_alnum();
++	name_buf[9]  = '.';
++	name_buf[10] = random_alnum();
++	name_buf[11] = random_alnum();
++	name_buf[12] = '\0';
++
++	susfs_fake_qstr_name.name = name_buf;
++	susfs_fake_qstr_name.len  = 12;
++	susfs_fake_qstr_name.hash = full_name_hash(NULL, name_buf, 12);
++}
+ 
+ /* susfs_init */
+ void susfs_init(void) {
+ 	spin_lock_init(&susfs_spin_lock);
+ #ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
+ 	spin_lock_init(&susfs_uname_spin_lock);
+ 	susfs_my_uname_init();
+ #endif
++	generate_formatted_qstr();
+ 	SUSFS_LOGI("susfs is initialized! version: " SUSFS_VERSION " \n");
+ }
+ 
+ /* No module exit is needed becuase it should never be a loadable kernel module */
+ //void __init susfs_exit(void)
