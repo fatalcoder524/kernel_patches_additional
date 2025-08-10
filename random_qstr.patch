@@ -28,12 +28,12 @@ index 9c315023a..d5ab7ca9c 100644
  	struct path path;
  	int err = 0;
  	struct inode *inode = NULL;
-@@ -1288,18 +1290,47 @@
- out_kfree_kbuf:
- 	kfree(kbuf);
- 	return err;
+@@ -1299,18 +1301,48 @@
+ 	susfs_is_avc_log_spoofing_enabled = enabled;
+ 	spin_unlock(&susfs_spin_lock);
+ 	SUSFS_LOGI("enabled: %d\n", enabled);
  }
- 
++
 +static char random_alnum(void)
 +{
 +	unsigned char r = get_random_u32() % 62;
