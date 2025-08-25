@@ -1,20 +1,10 @@
---- "./kernel/selinux/rules.c"	2025-07-11 05:27:15.370082400 -0400
-+++ "./kernel/selinux/rules.c"	2025-07-11 05:46:15.023362789 -0400
-@@ -38,11 +38,11 @@
+diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
+index c1e803d7..1e8f98e6 100644
+--- a/kernel/selinux/rules.c
++++ b/kernel/selinux/rules.c
+@@ -137,10 +137,19 @@
  
- static DEFINE_MUTEX(ksu_rules);
- 
--void apply_kernelsu_rules()
-+void ksu_apply_kernelsu_rules()
- {
- 	struct policydb *db;
- 
--	if (!getenforce()) {
-+	if (!ksu_getenforce()) {
- 		pr_info("SELinux permissive or disabled, apply rules!\n");
- 	}
- 
-@@ -139,6 +139,15 @@
+ 	// Allow system server kill su process
  	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
  	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
  
@@ -29,4 +19,6 @@
 +
  	mutex_unlock(&ksu_rules);
  }
+ 
+ #define MAX_SEPOL_LEN 128
  

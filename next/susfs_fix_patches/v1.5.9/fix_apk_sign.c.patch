@@ -1,22 +1,14 @@
---- ./kernel/apk_sign.c	2025-07-19 15:34:49.962023700 -0400
-+++ ./kernel/apk_sign.c	2025-07-19 15:41:30.015681476 -0400
-@@ -363,7 +363,7 @@
+diff --git a/kernel/apk_sign.c b/kernel/apk_sign.c
+index c1e803d7..1e8f98e6 100644
+--- a/kernel/apk_sign.c
++++ b/kernel/apk_sign.c
+@@ -385,7 +385,8 @@
  
- #endif
- 
--bool is_manager_apk(char *path)
-+bool ksu_is_manager_apk(char *path)
- {
- 	int tries = 0;
- 
-@@ -388,5 +388,10 @@
+ 	// set debug info to print size and hash to kernel log
  	pr_info("%s: expected size: %u, expected hash: %s\n",
  		path, expected_manager_size, expected_manager_hash);
  
-+#ifdef CONFIG_KSU_SUSFS
-+	return (check_v2_signature(path, expected_manager_size, expected_manager_hash)
-+			|| check_v2_signature(path, 0x39b, "593d4ce870c02468639efeef631e07ca4d852d63f154be56706229f9a5be0800")); // TheWildJames Fork Manager
-+#else
- 	return check_v2_signature(path, expected_manager_size, expected_manager_hash);
-+#endif
+-	return check_v2_signature(path, expected_manager_size, expected_manager_hash);
++	return check_v2_signature(path, expected_manager_size, expected_manager_hash)
++		|| check_v2_signature(path, 0x39b, "593d4ce870c02468639efeef631e07ca4d852d63f154be56706229f9a5be0800"); // TheWildJames Fork Manager
  }
