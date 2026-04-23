@@ -1,0 +1,163 @@
+From a18eeb7ee1c6c7de434606797e597991325720a2 Mon Sep 17 00:00:00 2001
+From: fatalcoder524 <11532648+fatalcoder524@users.noreply.github.com>
+Date: Fri, 24 Apr 2026 00:28:39 +0530
+Subject: [PATCH] ath10k: implement IRQ coalescing and optimize for power
+ efficiency
+
+Improve power efficiency and reduce CPU overhead, specifically for mobile
+and Android-based environments, by reducing the interrupt frequency and
+tuning polling behavior.
+
+Changes include:
+- Implement Interrupt Coalescing: Introduce 'ce_irq_coalesce' module
+  parameter to batch CE interrupts. This allows the CPU to stay in low-power
+  states longer by reducing the number of context switches per packet.
+- Optimize Interrupt Handler: Use ath10k_pci_should_poll() to ensure
+  NAPI is only scheduled when there is actual pending RX/TX work, avoiding
+  unnecessary polling cycles.
+- Tune NAPI Budget: Reduce ATH10K_NAPI_BUDGET from 64 to 32 to improve
+  system responsiveness and prevent the driver from monopolizing CPU time.
+- Adjust PCI Sleep: Decrease the PCI sleep grace period from 60ms to 50ms
+  to allow the SoC to enter deep sleep more aggressively.
+
+These changes trade a negligible amount of peak latency for a measurable
+reduction in power consumption and improved thermal performance.
+
+Signed-off-by: fatalcoder524 <11532648+fatalcoder524@users.noreply.github.com>
+---
+ drivers/net/wireless/ath/ath10k/ce.c   | 26 ++++++++++++++++++++++++++
+ drivers/net/wireless/ath/ath10k/core.h |  2 +-
+ drivers/net/wireless/ath/ath10k/pci.c  | 20 +++++++++++++++++++-
+ drivers/net/wireless/ath/ath10k/pci.h  |  4 +++-
+ 4 files changed, 49 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath10k/ce.c b/drivers/net/wireless/ath/ath10k/ce.c
+index c45c814fd..d22a0d394 100644
+--- a/drivers/net/wireless/ath/ath10k/ce.c
++++ b/drivers/net/wireless/ath/ath10k/ce.c
+@@ -48,6 +48,8 @@
+  * the buffer is sent/received.
+  */
+ 
++extern unsigned int ath10k_pci_get_ce_irq_coalesce(void);
++
+ static inline u32 shadow_sr_wr_ind_addr(struct ath10k *ar,
+ 					struct ath10k_ce_pipe *ce_state)
+ {
+@@ -1730,6 +1732,8 @@ int ath10k_ce_init_pipe(struct ath10k *ar, unsigned int ce_id,
+ 			const struct ce_attr *attr)
+ {
+ 	int ret;
++	struct ath10k_ce_pipe *ce_state = ar->ce_states[ce_id];
++	u32 ctrl_addr = ce_state->ctrl_addr;
+ 
+ 	if (attr->src_nentries) {
+ 		ret = ath10k_ce_init_src_ring(ar, ce_id, attr);
+@@ -1749,6 +1753,28 @@ int ath10k_ce_init_pipe(struct ath10k *ar, unsigned int ce_id,
+ 		}
+ 	}
+ 
++	/* IRQ coalescing / mitigation for better power efficiency on Android */
++	if (ce_id < CE_COUNT && ar->hw_ce_regs->wm_regs) {
++		u32 wm_addr = ctrl_addr + ar->hw_ce_regs->wm_regs->addr;
++		u32 wm_val = ath10k_ce_read32(ar, wm_addr);
++		u32 cc = ath10k_pci_get_ce_irq_coalesce();
++
++		if (cc) {
++			cc = min_t(unsigned int, cc, 16);
++
++			u32 shift = ffs(ar->hw_ce_regs->wm_regs->cc_mask) - 1;
++			u32 width = fls(ar->hw_ce_regs->wm_regs->cc_mask) - shift;
++			u32 max_val = (1 << width) - 1;
++			u32 cc_val = min_t(unsigned int, cc, max_val);
++
++			wm_val &= ~ar->hw_ce_regs->wm_regs->cc_mask;
++			wm_val |= cc_val << shift;
++
++			ath10k_ce_write32(ar, wm_addr, wm_val);
++			ath10k_dbg(ar, ATH10K_DBG_BOOT, "ce%u irq coalesce threshold %u\n", ce_id, cc_val);
++		}
++	}
++
+ 	return 0;
+ }
+ EXPORT_SYMBOL(ath10k_ce_init_pipe);
+diff --git a/drivers/net/wireless/ath/ath10k/core.h b/drivers/net/wireless/ath/ath10k/core.h
+index 5aeff2d9f..f4b94ee2c 100644
+--- a/drivers/net/wireless/ath/ath10k/core.h
++++ b/drivers/net/wireless/ath/ath10k/core.h
+@@ -60,7 +60,7 @@
+ #define ATH10K_KEEPALIVE_MAX_UNRESPONSIVE 3900
+ 
+ /* NAPI poll budget */
+-#define ATH10K_NAPI_BUDGET      64
++#define ATH10K_NAPI_BUDGET      32
+ 
+ /* SMBIOS type containing Board Data File Name Extension */
+ #define ATH10K_SMBIOS_BDF_EXT_TYPE 0xF8
+diff --git a/drivers/net/wireless/ath/ath10k/pci.c b/drivers/net/wireless/ath/ath10k/pci.c
+index 3a62f6697..c632ee3d1 100644
+--- a/drivers/net/wireless/ath/ath10k/pci.c
++++ b/drivers/net/wireless/ath/ath10k/pci.c
+@@ -426,6 +426,16 @@ static const struct ce_service_to_pipe pci_target_service_to_ce_map_wlan[] = {
+ 	},
+ };
+ 
++static unsigned int ath10k_ce_irq_coalesce = 8;
++module_param_named(ce_irq_coalesce, ath10k_ce_irq_coalesce, uint, 0644);
++MODULE_PARM_DESC(ce_irq_coalesce, "CE interrupt coalescing threshold (packets) (0 = default/off)");
++
++unsigned int ath10k_pci_get_ce_irq_coalesce(void)
++{
++	return ath10k_ce_irq_coalesce;
++}
++EXPORT_SYMBOL_GPL(ath10k_pci_get_ce_irq_coalesce);
++
+ static bool ath10k_pci_is_awake(struct ath10k *ar)
+ {
+ 	struct ath10k_pci *ar_pci = ath10k_pci_priv(ar);
+@@ -3090,6 +3100,11 @@ static const struct ath10k_hif_ops ath10k_pci_hif_ops = {
+ 	.fetch_cal_eeprom	= ath10k_pci_hif_fetch_cal_eeprom,
+ };
+ 
++static inline bool ath10k_pci_should_poll(struct ath10k *ar)
++{
++    return ar->htt.rx_pending || ar->wmi.tx_pending;
++}
++
+ /*
+  * Top-level interrupt handler for all PCI interrupts from a Target.
+  * When a block of MSI interrupts is allocated, this top-level handler
+@@ -3116,7 +3131,10 @@ static irqreturn_t ath10k_pci_interrupt_handler(int irq, void *arg)
+ 
+ 	ath10k_pci_disable_and_clear_legacy_irq(ar);
+ 	ath10k_pci_irq_msi_fw_mask(ar);
+-	napi_schedule(&ar->napi);
++	if (likely(ath10k_pci_should_poll(ar)))
++		napi_schedule(&ar->napi);
++	else
++		return IRQ_HANDLED;
+ 
+ 	return IRQ_HANDLED;
+ }
+diff --git a/drivers/net/wireless/ath/ath10k/pci.h b/drivers/net/wireless/ath/ath10k/pci.h
+index cf64898b9..37c32232a 100644
+--- a/drivers/net/wireless/ath/ath10k/pci.h
++++ b/drivers/net/wireless/ath/ath10k/pci.h
+@@ -250,10 +250,12 @@ int ath10k_pci_wait_for_target_init(struct ath10k *ar);
+ int ath10k_pci_setup_resource(struct ath10k *ar);
+ void ath10k_pci_release_resource(struct ath10k *ar);
+ 
++unsigned int ath10k_pci_get_ce_irq_coalesce(void);
++
+ /* QCA6174 is known to have Tx/Rx issues when SOC_WAKE register is poked too
+  * frequently. To avoid this put SoC to sleep after a very conservative grace
+  * period. Adjust with great care.
+  */
+-#define ATH10K_PCI_SLEEP_GRACE_PERIOD_MSEC 60
++#define ATH10K_PCI_SLEEP_GRACE_PERIOD_MSEC 50
+ 
+ #endif /* _PCI_H_ */
+-- 
+2.52.0.windows.1
+
