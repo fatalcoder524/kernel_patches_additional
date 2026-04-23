@@ -1,0 +1,47 @@
+diff --git a/midas_ioctl.c b/midas_ioctl.c
+index a0e89a5..86717ca 100644
+--- a/midas_ioctl.c
++++ b/midas_ioctl.c
+@@ -75,23 +75,7 @@ static int check_track_uid(int uid)
+ 
+ static void query_pid_name(struct task_struct *p, char *pid_name)
+ {
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+-	strncpy(pid_name, p->comm, TASK_COMM_LEN);
+-#else
+-	char buf[WQ_NAME_LEN] = {0};
+-
+-	if (!(p->flags & PF_WQ_WORKER)) {
+-		strncpy(pid_name, p->comm, TASK_COMM_LEN);
+-	} else {
+-		get_worker_info(p, buf);
+-		if (buf[0]) {
+-			strncpy(pid_name, buf, TASK_COMM_LEN - 1);
+-			pid_name[TASK_COMM_LEN - 1] = '\0';
+-		} else {
+-			strncpy(pid_name, p->comm, TASK_COMM_LEN);
+-		}
+-	}
+-#endif
++	get_task_comm(pid_name, p);
+ }
+ 
+ static void update_or_create_entry_locked(uid_t uid, struct task_struct *p, u64 cputime,
+@@ -121,14 +105,9 @@ static void update_or_create_entry_locked(uid_t uid, struct task_struct *p, u64
+ 	if (type == TYPE_PROCESS) {
+ 		midas_mmap_buf.entrys[i].id[ID_PID] = task_pid_nr(p);
+ 		midas_mmap_buf.entrys[i].id[ID_TGID] = task_tgid_nr(p);
+-		query_pid_name(p, midas_mmap_buf.entrys[i].pid_name);
+-		/* Get tgid name */
+-		rcu_read_lock();
+-		task = find_task_by_vpid(midas_mmap_buf.entrys[i].id[ID_TGID]);
+-		rcu_read_unlock();
+-		if (task != NULL) {
+-			strncpy(midas_mmap_buf.entrys[i].tgid_name, task->comm, TASK_COMM_LEN);
+-		}
++		
++		get_task_comm(midas_mmap_buf.entrys[i].pid_name, p);
++		get_task_comm(midas_mmap_buf.entrys[i].tgid_name, p->group_leader);
+ 	}
+ 
+ 	/* the unit of time_in_state is ms */
