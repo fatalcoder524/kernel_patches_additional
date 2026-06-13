@@ -31,14 +31,13 @@ diff --git a/include/linux/btf.h b/include/linux/btf.h
 index 214fde9..6d89c67 100644
 --- a/include/linux/btf.h
 +++ b/include/linux/btf.h
-@@ -5,6 +5,12 @@
+@@ -5,6 +5,11 @@
  #define _LINUX_BTF_H 1
  
  #include <linux/types.h>
 +#ifndef __GENKSYMS__
 +#include <linux/mm.h>
 +#include <linux/slab.h>
-+#include <linux/bpfptr.h>
 +#include <linux/seq_file.h>
 +#endif
  #include <uapi/linux/btf.h>
