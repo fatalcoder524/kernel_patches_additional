@@ -220,16 +220,18 @@ index 834a775..9a22ca7 100644
  };
  
  struct tcp_congestion_ops {
-@@ -1091,6 +1144,13 @@ struct tcp_congestion_ops {
+@@ -1091,6 +1144,15 @@ struct tcp_congestion_ops {
  	void (*init)(struct sock *sk);
  	/* cleanup private data  (optional) */
  	void (*release)(struct sock *sk);
 +#ifndef __GENKSYMS__
-+	/* pick target number of segments per TSO/GSO skb (optional): */
-+	u32 (*tso_segs)(struct sock *sk, unsigned int mss_now);
-+	/* react to a specific lost skb (optional) */
-+	void (*skb_marked_lost)(struct sock *sk, const struct sk_buff *skb);
-+	/* returns the multiplier used in tcp_sndbuf_expand (optional) */
++	struct {
++		/* pick target number of segments per TSO/GSO skb (optional): */
++		u32 (*tso_segs)(struct sock *sk, unsigned int mss_now);
++		/* react to a specific lost skb (optional) */
++		void (*skb_marked_lost)(struct sock *sk, const struct sk_buff *skb);
++		/* returns the multiplier used in tcp_sndbuf_expand (optional) */
++	};
 +#endif
  } ____cacheline_aligned_in_smp;
  
