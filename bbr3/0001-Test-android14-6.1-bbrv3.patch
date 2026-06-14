@@ -171,7 +171,7 @@ index 834a775..9a22ca7 100644
 +				u64 __kabi_placeholder_f_tx;
 +				struct {
 +					u32 first_tx_mstamp;
-+					u32 __unused_1;
++					u32 in_flight:30, unused_2:2;
 +				};
 +			};
 +			/* when we reached the "delivered" count */
