@@ -1,10 +1,22 @@
 diff --git a/include/net/netns/ipv4.h b/include/net/netns/ipv4.h
-index cb15b3c..9de2675 100644
+index cb15b3c..de7651b 100644
 --- a/include/net/netns/ipv4.h
 +++ b/include/net/netns/ipv4.h
-@@ -41,6 +41,14 @@ struct inet_timewait_death_row {
+@@ -228,6 +228,6 @@ struct netns_ipv4 {
+ 	atomic_t	rt_genid;
+ 	siphash_key_t	ip_id_key;
  
- struct tcp_fastopen_context;
+-	ANDROID_KABI_RESERVE(1);
++	ANDROID_KABI_USE(1, struct tcp_plb_net_context *tcp_plb);
+ };
+ #endif
+diff --git a/include/net/tcp.h b/include/net/tcp.h
+index 834a775..444c290 100644
+--- a/include/net/tcp.h
++++ b/include/net/tcp.h
+@@ -53,6 +53,19 @@ int tcp_orphan_count_sum(void);
+ 
+ void tcp_time_wait(struct sock *sk, int state, int timeo);
  
 +struct tcp_plb_sysctl_params {
 +	u8 sysctl_tcp_plb_enabled;
@@ -14,25 +26,6 @@ index cb15b3c..9de2675 100644
 +	int sysctl_tcp_plb_cong_thresh;
 +};
 +
- struct netns_ipv4 {
- 	/* Please keep tcp_death_row at first field in netns_ipv4 */
- 	struct inet_timewait_death_row tcp_death_row ____cacheline_aligned_in_smp;
-@@ -228,6 +236,6 @@ struct netns_ipv4 {
- 	atomic_t	rt_genid;
- 	siphash_key_t	ip_id_key;
- 
--	ANDROID_KABI_RESERVE(1);
-+	ANDROID_KABI_USE(1, struct tcp_plb_net_context *tcp_plb);
- };
- #endif
-diff --git a/include/net/tcp.h b/include/net/tcp.h
-index 834a775..ec8f1f6 100644
---- a/include/net/tcp.h
-+++ b/include/net/tcp.h
-@@ -53,6 +53,11 @@ int tcp_orphan_count_sum(void);
- 
- void tcp_time_wait(struct sock *sk, int state, int timeo);
- 
 +struct tcp_plb_net_context {
 +	struct tcp_plb_sysctl_params params;
 +	struct ctl_table_header *sysctl_header;
@@ -41,15 +34,17 @@ index 834a775..ec8f1f6 100644
  #define MAX_TCP_HEADER	L1_CACHE_ALIGN(128 + MAX_HEADER)
  #define MAX_TCP_OPTION_SPACE 40
  #define TCP_MIN_SND_MSS		48
-@@ -984,6 +989,7 @@ enum tcp_ca_event {
+@@ -984,6 +997,9 @@ enum tcp_ca_event {
  	CA_EVENT_LOSS,		/* loss timeout */
  	CA_EVENT_ECN_NO_CE,	/* ECT set, but not CE marked */
  	CA_EVENT_ECN_IS_CE,	/* received CE marked IP packet */
++#ifndef __GENKSYMS__
 +	CA_EVENT_TLP_RECOVERY,	/* a lost segment was repaired by TLP probe */
++#endif
  };
  
  /* Information about inbound ACK, passed to cong_ops->in_ack_event() */
-@@ -1006,7 +1012,11 @@ enum tcp_ca_ack_event_flags {
+@@ -1006,7 +1022,11 @@ enum tcp_ca_ack_event_flags {
  #define TCP_CONG_NON_RESTRICTED 0x1
  /* Requires ECN/ECT set on all packets */
  #define TCP_CONG_NEEDS_ECN	0x2
@@ -62,7 +57,7 @@ index 834a775..ec8f1f6 100644
  
  union tcp_cc_info;
  
-@@ -2118,6 +2128,34 @@ extern void tcp_rack_advance(struct tcp_sock *tp, u8 sacked, u32 end_seq,
+@@ -2118,6 +2138,34 @@ extern void tcp_rack_advance(struct tcp_sock *tp, u8 sacked, u32 end_seq,
  extern void tcp_rack_reo_timeout(struct sock *sk);
  extern void tcp_rack_update_reo_wnd(struct sock *sk, struct rate_sample *rs);
  
@@ -137,37 +132,6 @@ index 20ee93f..a2118e6 100644
  union tcp_cc_info {
  	struct tcpvegas_info	vegas;
  	struct tcp_dctcp_info	dctcp;
-diff --git a/net/core/net_namespace.c b/net/core/net_namespace.c
-index 0cf467a..bcc9c02 100644
---- a/net/core/net_namespace.c
-+++ b/net/core/net_namespace.c
-@@ -47,6 +47,8 @@ static struct key_tag init_net_key_domain = { .usage = REFCOUNT_INIT(1) };
- struct net init_net;
- EXPORT_SYMBOL(init_net);
- 
-+extern struct pernet_operations plb_net_ops;
-+
- static bool init_net_initialized;
- /*
-  * pernet_ops_rwsem: protects: pernet_list, net_generic_ids,
-@@ -1118,6 +1120,7 @@ void __init net_ns_init(void)
- #ifdef CONFIG_KEYS
- 	init_net.key_domain = &init_net_key_domain;
- #endif
-+
- 	down_write(&pernet_ops_rwsem);
- 	if (setup_net(&init_net, &init_user_ns))
- 		panic("Could not setup the initial network namespace");
-@@ -1128,6 +1131,9 @@ void __init net_ns_init(void)
- 	if (register_pernet_subsys(&net_ns_ops))
- 		panic("Could not register network namespace subsystems");
- 
-+	if (register_pernet_subsys(&plb_net_ops))
-+		panic("Could not register plb sysctl params");
-+
- 	rtnl_register(PF_UNSPEC, RTM_NEWNSID, rtnl_net_newid, NULL,
- 		      RTNL_FLAG_DOIT_UNLOCKED);
- 	rtnl_register(PF_UNSPEC, RTM_GETNSID, rtnl_net_getid, rtnl_net_dumpid,
 diff --git a/net/ipv4/Kconfig b/net/ipv4/Kconfig
 index 23b0606..46ef721 100644
 --- a/net/ipv4/Kconfig
@@ -229,7 +193,7 @@ index c75465a..b87c960 100644
  obj-$(CONFIG_TCP_CONG_CDG) += tcp_cdg.o
  obj-$(CONFIG_TCP_CONG_CUBIC) += tcp_cubic.o
 diff --git a/net/ipv4/sysctl_net_ipv4.c b/net/ipv4/sysctl_net_ipv4.c
-index d1ca9aa..e54692d 100644
+index d1ca9aa..4a2ec45 100644
 --- a/net/ipv4/sysctl_net_ipv4.c
 +++ b/net/ipv4/sysctl_net_ipv4.c
 @@ -53,10 +53,120 @@ static u32 u32_max_div_HZ = UINT_MAX / HZ;
@@ -345,7 +309,7 @@ index d1ca9aa..e54692d 100644
 +	kfree(ctx);
 +}
 +
-+struct pernet_operations plb_net_ops = {
++static struct pernet_operations plb_net_ops = {
 +	.init = plb_net_init,
 +	.exit = plb_net_exit,
 +};
@@ -353,6 +317,19 @@ index d1ca9aa..e54692d 100644
  /* Update system visible IP port range */
  static void set_local_port_range(struct net *net, int range[2])
  {
+@@ -1453,6 +1563,12 @@ static __init int sysctl_ipv4_init(void)
+ 		return -ENOMEM;
+ 	}
+ 
++	if (register_pernet_subsys(&plb_net_ops)) {
++		unregister_pernet_subsys(&ipv4_sysctl_ops);
++		unregister_net_sysctl_table(hdr);
++		return -ENOMEM;
++	}
++
+ 	return 0;
+ }
+ 
 diff --git a/net/ipv4/tcp_bbr3.c b/net/ipv4/tcp_bbr3.c
 new file mode 100644
 index 0000000..ed77765
@@ -2752,14 +2729,14 @@ index 0000000..ed77765
 +MODULE_DESCRIPTION("TCP BBR (Bottleneck Bandwidth and RTT)");
 +MODULE_VERSION(__stringify(BBR_VERSION));
 diff --git a/net/ipv4/tcp_ipv4.c b/net/ipv4/tcp_ipv4.c
-index 52028ec..eda72cb 100644
+index 52028ec..242f988 100644
 --- a/net/ipv4/tcp_ipv4.c
 +++ b/net/ipv4/tcp_ipv4.c
 @@ -3145,6 +3145,7 @@ static void __net_exit tcp_sk_exit(struct net *net)
  static int __net_init tcp_sk_init(struct net *net)
  {
  	int res, cpu, cnt;
-+	struct tcp_plb_net_context *ctx;
++	struct tcp_plb_net_context *ctx, *init_ctx;
  
  	net->ipv4.tcp_sk = alloc_percpu(struct sock *);
  	if (!net->ipv4.tcp_sk)
@@ -2770,7 +2747,7 @@ index 52028ec..eda72cb 100644
 +	if (net->ipv4.tcp_plb && !net_eq(net, &init_net) && init_net.ipv4.tcp_plb)
 +	{
 +		ctx = (struct tcp_plb_net_context *)net->ipv4.tcp_plb;
-+		struct tcp_plb_net_context *init_ctx = (struct tcp_plb_net_context *)init_net.ipv4.tcp_plb;
++		init_ctx = (struct tcp_plb_net_context *)init_net.ipv4.tcp_plb;
 +
 +		ctx->params.sysctl_tcp_plb_enabled = init_ctx->params.sysctl_tcp_plb_enabled; 
 +		ctx->params.sysctl_tcp_plb_idle_rehash_rounds = init_ctx->params.sysctl_tcp_plb_idle_rehash_rounds; 
