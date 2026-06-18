@@ -624,7 +624,7 @@ new file mode 100644
 index 0000000..7f602ee
 --- /dev/null
 +++ b/net/ipv4/tcp_bbr3.c
-@@ -0,0 +1,2363 @@
+@@ -0,0 +1,2367 @@
 +/* BBR (Bottleneck Bandwidth and RTT) congestion control
 + *
 + * BBR is a model-based congestion control algorithm that aims for low queues,
@@ -2884,6 +2884,10 @@ index 0000000..7f602ee
 +	if (ext & (1 << (INET_DIAG_BBRINFO - 1)) ||
 +	    ext & (1 << (INET_DIAG_VEGASINFO - 1))) {
 +		struct bbr3 *bbr = bbr3_get_priv(sk);
++  u64 bw;
++		u64 bw_hi;
++		u64 bw_lo;
++		struct tcp_bbr_info *bbr_info = &info->bbr;
 +		if(!bbr || !bbr->initialized)
 +			return 0;
 +
