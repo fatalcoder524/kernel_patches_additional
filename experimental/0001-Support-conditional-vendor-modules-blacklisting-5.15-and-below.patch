@@ -1,0 +1,101 @@
+From 865d64a5fb717c1e3fcd380f5ff7da6e15fdecdf Mon Sep 17 00:00:00 2001
+From: fatalcoder524 <11532648+fatalcoder524@users.noreply.github.com>
+Date: Tue, 7 Jul 2026 11:54:52 +0000
+Subject: [PATCH] Support conditional vendor modules blacklisting
+
+---
+ arch/arm64/Kconfig |  7 +++++++
+ kernel/module.c    | 39 ++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 45 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index bcc7ab2..d7ac979 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -2175,6 +2175,13 @@ source "drivers/cpuidle/Kconfig"
+ 
+ source "drivers/cpufreq/Kconfig"
+ 
++config DEBLOAT_VENDOR_MODULES
++	string "Debloat specific custom modules"
++	default ""
++	help
++	  Pass a comma-separated list of module names to block.
++	  Example: "oplus_network_tuning,oplus_bsp_zsmalloc"
++
+ endmenu
+ 
+ source "drivers/acpi/Kconfig"
+diff --git a/kernel/module.c b/kernel/module.c
+index bcadcef..0da07ed 100644
+--- a/kernel/module.c
++++ b/kernel/module.c
+@@ -71,6 +71,26 @@
+ #define ARCH_SHF_SMALL 0
+ #endif
+ 
++DEFINE_STATIC_KEY_TRUE(vendor_debloat_key);
++
++static int __init parse_oplus_boot_mode(char *str)
++{
++    if (!str)
++        return -EINVAL;
++
++    pr_info("Oplus Boot Mode from cmdline: %s\n", str);
++
++    if (strcmp(str, "normal") != 0 && strcmp(str, "reboot") != 0) {
++        pr_info("Oplus Boot Mode: Non Standard detected. Disabling module debloater.\n");
++        static_branch_disable(&vendor_debloat_key);
++    } else {
++        pr_info("Oplus Boot Mode: Standard state. Debloater remains ACTIVE.\n");
++    }
++
++    return 1;
++}
++__setup("oplusboot.mode=", parse_oplus_boot_mode);
++
+ /*
+  * Modules' sections will be aligned on page boundaries
+  * to ensure complete separation of code and data, but
+@@ -3584,13 +3604,14 @@ int __weak module_frob_arch_sections(Elf_Ehdr *hdr,
+ 
+ /* module_blacklist is a comma-separated list of module names */
+ static char *module_blacklist;
++static const char *custom_module_blacklist = CONFIG_DEBLOAT_VENDOR_MODULES;
+ static bool blacklisted(const char *module_name)
+ {
+ 	const char *p;
+ 	size_t len;
+ 
+ 	if (!module_blacklist)
+-		return false;
++		goto custom_blacklist;
+ 
+ 	for (p = module_blacklist; *p; p += len) {
+ 		len = strcspn(p, ",");
+@@ -3599,6 +3620,22 @@ static bool blacklisted(const char *module_name)
+ 		if (p[len] == ',')
+ 			len++;
+ 	}
++
++	custom_blacklist:
++	if (static_branch_likely(&vendor_debloat_key)) {
++		if (!custom_module_blacklist || custom_module_blacklist[0] == '\0')
++			goto out;
++
++		for (p = custom_module_blacklist; *p; p += len) {
++			len = strcspn(p, ",");
++			if (strlen(module_name) == len && !memcmp(module_name, p, len))
++				return true;
++			if (p[len] == ',')
++				len++;
++		}
++	}
++
++	out:
+ 	return false;
+ }
+ core_param(module_blacklist, module_blacklist, charp, 0400);
+-- 
+2.47.3
+
