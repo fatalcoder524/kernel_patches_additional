@@ -1,12 +1,12 @@
-From d2583a2a55498fdd69a514f170cbd4dad9b0c758 Mon Sep 17 00:00:00 2001
+From cd556571f6924a593c9fa553dc44a697c35041d7 Mon Sep 17 00:00:00 2001
 From: fatalcoder524 <11532648+fatalcoder524@users.noreply.github.com>
 Date: Tue, 7 Jul 2026 12:01:10 +0000
 Subject: [PATCH] Support conditional vendor modules blacklisting
 
 ---
  arch/arm64/Kconfig   |  7 +++++++
- kernel/module/main.c | 40 +++++++++++++++++++++++++++++++++++++++-
- 2 files changed, 46 insertions(+), 1 deletion(-)
+ kernel/module/main.c | 49 +++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 55 insertions(+), 1 deletion(-)
 
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
 index de459a7..c081a01 100644
@@ -27,37 +27,46 @@ index de459a7..c081a01 100644
  
  source "drivers/acpi/Kconfig"
 diff --git a/kernel/module/main.c b/kernel/module/main.c
-index ddd1240..34ace24 100644
+index ddd1240..9459619 100644
 --- a/kernel/module/main.c
 +++ b/kernel/module/main.c
-@@ -63,6 +63,26 @@
+@@ -63,6 +63,35 @@
  #undef CREATE_TRACE_POINTS
  #include <trace/hooks/module.h>
  
++#ifndef __GENKSYMS__
++#include <linux/bootconfig.h>
++#endif
++
 +DEFINE_STATIC_KEY_TRUE(vendor_debloat_key);
 +
-+static int __init parse_oplus_boot_mode(char *str)
++static int __init parse_oplus_boot_mode(char *boot_mode_oplus)
 +{
-+    if (!str)
-+        return -EINVAL;
++	const char *mode;
 +
-+    pr_info("Oplus Boot Mode from cmdline: %s\n", str);
++	mode = (char *)xbc_find_value("androidboot.mode", NULL);
++	if (!mode)
++		mode = boot_mode_oplus;
 +
-+    if (strcmp(str, "normal") != 0 && strcmp(str, "reboot") != 0) {
-+        pr_info("Oplus Boot Mode: Non Standard detected. Disabling module debloater.\n");
-+        static_branch_disable(&vendor_debloat_key);
-+    } else {
-+        pr_info("Oplus Boot Mode: Standard state. Debloater remains ACTIVE.\n");
-+    }
++	if (!mode)
++		return 0;
 +
-+    return 1;
++	if (strcmp(mode, "normal") == 0 || strcmp(mode, "reboot") == 0) {
++		pr_info("Oplus Boot Mode: Standard state (%s). Debloater remains ACTIVE.\n", mode);
++	} else {
++		pr_info("Oplus Boot Mode: Non Standard detected (%s). Disabling module debloater.\n", mode);
++		static_branch_disable(&vendor_debloat_key);
++	}
++
++	return 1;
 +}
 +__setup("oplusboot.mode=", parse_oplus_boot_mode);
++
 +
  /*
   * Mutex protects:
   * 1) List of modules (also safely readable with preempt_disable),
-@@ -2301,13 +2321,15 @@ int __weak module_frob_arch_sections(Elf_Ehdr *hdr,
+@@ -2301,13 +2330,15 @@ int __weak module_frob_arch_sections(Elf_Ehdr *hdr,
  
  /* module_blacklist is a comma-separated list of module names */
  static char *module_blacklist;
@@ -74,7 +83,7 @@ index ddd1240..34ace24 100644
  
  	for (p = module_blacklist; *p; p += len) {
  		len = strcspn(p, ",");
-@@ -2316,6 +2338,22 @@ static bool blacklisted(const char *module_name)
+@@ -2316,6 +2347,22 @@ static bool blacklisted(const char *module_name)
  		if (p[len] == ',')
  			len++;
  	}
