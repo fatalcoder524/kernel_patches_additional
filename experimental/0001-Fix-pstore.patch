@@ -1,0 +1,30 @@
+From 974e93b068b8e57cbfa8f153d4612a2d9bba8a5f Mon Sep 17 00:00:00 2001
+From: fatalcoder524 <11532648+fatalcoder524@users.noreply.github.com>
+Date: Wed, 15 Jul 2026 22:48:47 +0530
+Subject: [PATCH] Fix pstore
+
+---
+ fs/pstore/ram.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/fs/pstore/ram.c b/fs/pstore/ram.c
+index f123944..0c0e86f 100644
+--- a/fs/pstore/ram.c
++++ b/fs/pstore/ram.c
+@@ -681,10 +681,10 @@ static int ramoops_parse_dt(struct platform_device *pdev,
+ 	}
+ 
+ 	parse_u32("mem-type", pdata->mem_type, pdata->mem_type);
+-	parse_u32("record-size", pdata->record_size, 0);
+-	parse_u32("console-size", pdata->console_size, 0);
++	parse_u32("record-size", pdata->record_size, 0x4000);
++	parse_u32("console-size", pdata->console_size, 0x1f8000);
+ 	parse_u32("ftrace-size", pdata->ftrace_size, 0);
+-	parse_u32("pmsg-size", pdata->pmsg_size, 0);
++	parse_u32("pmsg-size", pdata->pmsg_size, 0x40000);
+ 	parse_u32("ecc-size", pdata->ecc_info.ecc_size, 0);
+ 	parse_u32("flags", pdata->flags, 0);
+ 	parse_u32("max-reason", pdata->max_reason, pdata->max_reason);
+-- 
+2.47.3
+
