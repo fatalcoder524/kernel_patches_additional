@@ -1,0 +1,92 @@
+From e9023238fd9e2de678a7876139356ca1f91318c1 Mon Sep 17 00:00:00 2001
+From: fatalcoder524 <11532648+fatalcoder524@users.noreply.github.com>
+Date: Sat, 18 Jul 2026 18:03:02 +0530
+Subject: [PATCH] Add logging to vold
+
+---
+ system/vold/Decrypt.cpp | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/system/vold/Decrypt.cpp b/system/vold/Decrypt.cpp
+index a02bad8..3b0297c 100644
+--- a/system/vold/Decrypt.cpp
++++ b/system/vold/Decrypt.cpp
+@@ -570,6 +570,7 @@ namespace keystore {
+ 
+ 			ks2::KeyEntryResponse keyEntryResponse;
+ 			::ndk::SpAIBinder keystoreBinder(AServiceManager_checkService("android.system.keystore2.IKeystoreService/default"));
++			printf("keystore2 IKeystoreService binder before getKeyEntry/createOperation: %s\n", keystoreBinder.get() ? "alive" : "NULL");
+ 			auto keystore = ks2::IKeystoreService::fromBinder(keystoreBinder);
+ 			auto rc = keystore->getKeyEntry(keyDescriptor(keystore_alias), &keyEntryResponse);
+ 			if (!rc.isOk()) {
+@@ -588,7 +589,10 @@ namespace keystore {
+ 				keyResponse.metadata.key, begin_params.vector_data(), true,
+ 				&encOperationResponse);
+ 			if (!begin_rc.isOk()) {
+-				printf("Begin Operation failed\n");
++				printf("Begin Operation failed: exception=%d serviceSpecific=%d msg=%s\n",
++					begin_rc.getExceptionCode(),
++					begin_rc.getServiceSpecificError(),
++					begin_rc.getDescription().c_str());
+ 				return disk_decryption_secret_key;
+ 			}
+ 			std::optional<std::vector<uint8_t>> optPlaintext;
+@@ -669,7 +673,7 @@ userid_t fakeUid(const userid_t uid) {
+ }
+ 
+ bool Is_Weaver(const std::string& spblob_path, const std::string& handle_str) {
+-	printf("Is_Weaver\n");
++	printf("Is_Weaver Checking\n");
+ 	struct stat st;
+ 	std::vector<std::string> weaver_file_paths = {
+ 		spblob_path + handle_str + ".weaver",
+@@ -678,10 +682,12 @@ bool Is_Weaver(const std::string& spblob_path, const std::string& handle_str) {
+ 	};
+     for (auto& weaver_file : weaver_file_paths) {
+ 		if (stat(weaver_file.c_str(), &st) == 0) {
++			printf("Is_Weaver: true\n");
+ 			return true;
+ 			break;
+ 		}
+ 	}
++	printf("Is_Weaver: false\n");
+ 	return false;
+ }
+ 
+@@ -831,8 +837,11 @@ bool Decrypt_User_Synth_Pass(const userid_t user_id, const std::string& Password
+ 			android::sp<android::hardware::gatekeeper::V1_0::IGatekeeper> gk_device;
+ 			constexpr const char gatekeeperServiceName[] = "android.hardware.gatekeeper.IGatekeeper/default";
+ 			if (AServiceManager_isDeclared(gatekeeperServiceName)) {
++				printf("gatekeeper: AIDL service IS declared\n");
+ 				::ndk::SpAIBinder ks2Binder(AServiceManager_waitForService(gatekeeperServiceName));
+ 				aidl_gk_device = AidlIGatekeeper::fromBinder(ks2Binder);
++			} else {
++				printf("gatekeeper: AIDL service NOT declared, falling back to HIDL\n");
+ 			}
+ 			if (!aidl_gk_device) {
+ 				gk_device = ::android::hardware::gatekeeper::V1_0::IGatekeeper::getService();
+@@ -933,12 +942,21 @@ bool Decrypt_User_Synth_Pass(const userid_t user_id, const std::string& Password
+ 					authToken.mac.assign(&hwAuthToken->hmac[0], &hwAuthToken->hmac[32]);
+ 					AIBinder* authzAIBinder = AServiceManager_waitForService("android.security.authorization");
+ 					::ndk::SpAIBinder binder(authzAIBinder);
++					printf("authorization binder before addAuthToken: %s\n", binder.get() ? "alive" : "NULL");
+ 					auto service = aidl::android::security::authorization::IKeystoreAuthorization::fromBinder(binder);
+ 					if (service == NULL) {
+ 						printf("error: could not connect to keystore service\n");
+ 						ALOGE("error: could not connect to keystore service\n");
+ 					}
+ 					auto binder_result = service->addAuthToken(authToken);
++					if (!binder_result.isOk()) {
++						printf("addAuthToken failed: exception=%d serviceSpecific=%d msg=%s\n",
++							binder_result.getExceptionCode(),
++							binder_result.getServiceSpecificError(),
++							binder_result.getMessage());
++					} else {
++						printf("addAuthToken OK\n");
++					}
+ 				}
+ 			}
+ 
+-- 
+2.47.3
+
