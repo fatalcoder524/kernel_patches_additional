@@ -1,14 +1,14 @@
-From e9023238fd9e2de678a7876139356ca1f91318c1 Mon Sep 17 00:00:00 2001
+From 57b36b274f3dcb5f4bb98984f59fd95ab441eb44 Mon Sep 17 00:00:00 2001
 From: fatalcoder524 <11532648+fatalcoder524@users.noreply.github.com>
 Date: Sat, 18 Jul 2026 18:03:02 +0530
 Subject: [PATCH] Add logging to vold
 
 ---
- system/vold/Decrypt.cpp | 22 ++++++++++++++++++++--
- 1 file changed, 20 insertions(+), 2 deletions(-)
+ system/vold/Decrypt.cpp | 53 ++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 45 insertions(+), 8 deletions(-)
 
 diff --git a/system/vold/Decrypt.cpp b/system/vold/Decrypt.cpp
-index a02bad8..3b0297c 100644
+index a02bad8..34da742 100644
 --- a/system/vold/Decrypt.cpp
 +++ b/system/vold/Decrypt.cpp
 @@ -570,6 +570,7 @@ namespace keystore {
@@ -65,25 +65,81 @@ index a02bad8..3b0297c 100644
  			}
  			if (!aidl_gk_device) {
  				gk_device = ::android::hardware::gatekeeper::V1_0::IGatekeeper::getService();
-@@ -933,12 +942,21 @@ bool Decrypt_User_Synth_Pass(const userid_t user_id, const std::string& Password
+@@ -844,6 +853,8 @@ bool Decrypt_User_Synth_Pass(const userid_t user_id, const std::string& Password
+ 			}
+ 
+ 			GKResponse gkResponse;
++			HardwareAuthToken authToken;
++			bool haveAuthToken = false;
+ 			if (aidl_gk_device) {
+ 				if (pwd.handle_len <= 0) {
+ 					printf("no password handle supplied\n");
+@@ -862,10 +873,17 @@ bool Decrypt_User_Synth_Pass(const userid_t user_id, const std::string& Password
+ 				auto result = aidl_gk_device->verify(fakeUid(user_id), 0 /* challenge */, pwd_handle_hidl, gk_pwd_token_hidl, &rsp);
+ 				free(gk_pwd_token);
+ 
++				if (!result.isOk()) {
++					printf("GateKeeper AIDL verify failed: %s\n", result.getDescription().c_str());
++					return Free_Return(retval, weaver_key, &pwd);
++				}
+ 				if (rsp.statusCode >= AidlIGatekeeper::STATUS_OK) {
+-					// Serialize HardwareAuthToken to a vector as hw_auth_token_t.
+ 					printf("GateKeeper status ok\n");
+-					gkResponse = GKResponse::ok(authToken2AidlVec(rsp.hardwareAuthToken));
++					// Keep the AIDL token intact. Serializing it as a legacy
++					// hw_auth_token_t and parsing it again can byte-swap its SIDs.
++					authToken = rsp.hardwareAuthToken;
++					haveAuthToken = true;
++					gkResponse = GKResponse::ok(std::vector<uint8_t>{});
+ 				} else if (rsp.statusCode == AidlIGatekeeper::ERROR_RETRY_TIMEOUT) {
+ 					printf("GateKeeper response timeout\n");
+ 					gkResponse = GKResponse::retry(rsp.timeoutMs);
+@@ -920,10 +938,9 @@ bool Decrypt_User_Synth_Pass(const userid_t user_id, const std::string& Password
+ 				}
+ 			}
+ 			if (gkResponse.response_code() == GKResponseCode::OK) {
+-				if (gkResponse.payload().size() != 0) {
++				if (!haveAuthToken && gkResponse.payload().size() != 0) {
+ 					const hw_auth_token_t* hwAuthToken =
+ 						reinterpret_cast<const hw_auth_token_t*>(gkResponse.payload().data());
+-					HardwareAuthToken authToken;
+ 					authToken.timestamp.milliSeconds = betoh64(hwAuthToken->timestamp);
+ 					authToken.challenge = hwAuthToken->challenge;
+ 					authToken.userId = hwAuthToken->user_id;
+@@ -931,14 +948,34 @@ bool Decrypt_User_Synth_Pass(const userid_t user_id, const std::string& Password
+ 					authToken.authenticatorType = static_cast<HardwareAuthenticatorType>(
+ 							betoh32(hwAuthToken->authenticator_type));
  					authToken.mac.assign(&hwAuthToken->hmac[0], &hwAuthToken->hmac[32]);
++					haveAuthToken = true;
++				}
++				if (haveAuthToken) {
  					AIBinder* authzAIBinder = AServiceManager_waitForService("android.security.authorization");
  					::ndk::SpAIBinder binder(authzAIBinder);
 +					printf("authorization binder before addAuthToken: %s\n", binder.get() ? "alive" : "NULL");
  					auto service = aidl::android::security::authorization::IKeystoreAuthorization::fromBinder(binder);
  					if (service == NULL) {
- 						printf("error: could not connect to keystore service\n");
- 						ALOGE("error: could not connect to keystore service\n");
+-						printf("error: could not connect to keystore service\n");
+-						ALOGE("error: could not connect to keystore service\n");
++						printf("error: could not connect to keystore authorization service\n");
++						ALOGE("error: could not connect to keystore authorization service\n");
++						return Free_Return(retval, weaver_key, &pwd);
  					}
  					auto binder_result = service->addAuthToken(authToken);
 +					if (!binder_result.isOk()) {
-+						printf("addAuthToken failed: exception=%d serviceSpecific=%d msg=%s\n",
++						printf("addAuthToken failed: exception=%d serviceSpecific=%d msg=%s desc=%s\n",
 +							binder_result.getExceptionCode(),
 +							binder_result.getServiceSpecificError(),
-+							binder_result.getMessage());
-+					} else {
-+						printf("addAuthToken OK\n");
++							binder_result.getMessage(),
++							binder_result.getDescription().c_str());
++						return Free_Return(retval, weaver_key, &pwd);
 +					}
++					printf("addAuthToken ok: userId=%lld authenticatorId=%lld type=%d\n",
++						static_cast<long long>(authToken.userId),
++						static_cast<long long>(authToken.authenticatorId),
++						static_cast<int32_t>(authToken.authenticatorType));
++				} else {
++					printf("GateKeeper returned no hardware auth token\n");
++					return Free_Return(retval, weaver_key, &pwd);
  				}
  			}
  
